@@ -8,14 +8,16 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//for prod,if test hard code this to-do make it config based
+// Run on port 5000 (used by nginx reverse proxy)
 builder.WebHost.UseUrls("http://0.0.0.0:5000");
-// ✅ Database connection
+
+
+// Database
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 
-// ✅ JWT Authentication
+// JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]);
 
@@ -43,36 +45,31 @@ builder.Services.AddAuthentication(options =>
 });
 
 
-//// ✅ Enable CORS for React frontend
-//builder.Services.AddCors(options =>
-//{
-//    options.AddPolicy("AllowReactApp",
-//        policy => policy
-//            .WithOrigins("http://localhost:5173", "https://iveph.com")
-//            .AllowAnyHeader()
-//            .AllowAnyMethod());
-//});
-// Enable CORS for React frontend
+// CORS for React frontend
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
-        policy => policy
-            .WithOrigins(
+        policy =>
+        {
+            policy.WithOrigins(
                 "http://localhost:5173",
                 "https://iveph.com",
                 "https://www.iveph.com"
             )
             .AllowAnyHeader()
-            .AllowAnyMethod());
+            .AllowAnyMethod()
+            .AllowCredentials();
+        });
 });
 
 
-// ✅ Controllers
+// Controllers
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddScoped<EmailService>();
 
-// this method shows the authorize button in swagger 
+
+// Swagger (with JWT auth support)
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -101,27 +98,39 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+
 var app = builder.Build();
 
+
+// Forward headers from nginx
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
-//// ✅ Middleware
+
+// IMPORTANT: CORS must run early
+app.UseCors("AllowReactApp");
+
+
+// Swagger
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseCors("AllowReactApp");
 
-// app.UseHttpsRedirection();
+// Security middleware
+// app.UseHttpsRedirection(); // nginx already handles https
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+
+// Map controllers
 app.MapControllers();
+
 
 // Health check endpoint
 app.MapGet("/", () => "IVEPH API running");
+
 
 app.Run();
