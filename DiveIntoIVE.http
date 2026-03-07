@@ -1,0 +1,6 @@
+@DiveIntoIVE_HostAddress = http://localhost:5279
+
+GET {{DiveIntoIVE_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
