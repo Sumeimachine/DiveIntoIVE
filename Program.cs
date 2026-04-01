@@ -1,6 +1,11 @@
-﻿using DiveIntoIVE.Data;
+﻿using DiveIntoIVE.Configurations;
+using DiveIntoIVE.Data;
+using DiveIntoIVE.Middleware;
+using DiveIntoIVE.Services.Implementations;
+using DiveIntoIVE.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -9,19 +14,29 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Run on port 5000 (used by nginx reverse proxy)
-builder.WebHost.UseUrls("http://0.0.0.0:5000");
+// builder.WebHost.UseUrls("http://0.0.0.0:5000");
 
 
-// Database
+// ---------------- DATABASE ----------------
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")));
 
 
-// JWT Authentication
+// ---------------- CONFIGURATION BINDING ----------------
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection("EmailSettings"));
+
+builder.Services.Configure<AppSettings>(
+    builder.Configuration.GetSection("AppSettings"));
+
+
+// ---------------- JWT AUTHENTICATION ----------------
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]);
+var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
 
-builder.Services.AddAuthentication(options =>
+builder.Services
+.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -45,31 +60,34 @@ builder.Services.AddAuthentication(options =>
 });
 
 
-// CORS for React frontend
+// ---------------- CORS for React frontend ----------------
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp",
-        policy =>
-        {
-            policy.WithOrigins(
-                "http://localhost:5173",
-                "https://iveph.com",
-                "https://www.iveph.com"
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-        });
+    options.AddPolicy("AllowReactApp", policy =>
+    {
+        policy.WithOrigins(
+            "http://localhost:5173",
+            "https://iveph.com",
+            "https://www.iveph.com"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
+    });
 });
 
 
-// Controllers
+// ---------------- SERVICES ----------------
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+
+
+// ---------------- CONTROLLERS ----------------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddScoped<EmailService>();
 
 
-// Swagger (with JWT auth support)
+// ---------------- SWAGGER + JWT ----------------
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -93,43 +111,58 @@ builder.Services.AddSwaggerGen(options =>
                     Id = "Bearer"
                 }
             },
-            new string[] {}
+            Array.Empty<string>()
         }
     });
 });
 
-
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("loginLimiter", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 5; // 5 requests
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueLimit = 0;
+    });
+});
+// ---------------- BUILD APP ----------------
 var app = builder.Build();
+app.UseMiddleware<ExceptionMiddleware>();
+app.UseRateLimiter();
 
-
-// Forward headers from nginx
+// ---------------- NGINX FORWARDED HEADERS ----------------
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto
 });
 
 
-// IMPORTANT: CORS must run early
+// ---------------- CORS ----------------
 app.UseCors("AllowReactApp");
 
 
-// Swagger
-app.UseSwagger();
-app.UseSwaggerUI();
+// ---------------- SWAGGER ----------------
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 
-// Security middleware
-// app.UseHttpsRedirection(); // nginx already handles https
+// ---------------- AUTH ----------------
+// app.UseHttpsRedirection(); // nginx handles HTTPS
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 
-// Map controllers
+// ---------------- ROUTES ----------------
 app.MapControllers();
 
 
-// Health check endpoint
+// ---------------- HEALTH CHECK ----------------
 app.MapGet("/", () => "IVEPH API running");
 
 
