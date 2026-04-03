@@ -79,7 +79,8 @@ public class AuthService : IAuthService
     {
         var user = await _context.Users
             .FirstOrDefaultAsync(u =>
-                u.Username == dto.Username || u.Email == dto.Username);
+                (u.Username == dto.Username || u.Email == dto.Username)
+            && u.IsEmailVerified);
 
         if (user == null)
             throw new Exception("Invalid username or password.");
