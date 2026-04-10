@@ -13,6 +13,8 @@ using System.Text;
 
 public class AuthService : IAuthService
 {
+
+    private const int DailyLoginReward = 1;
     private readonly AppDbContext _context;
     private readonly IEmailService _emailService;
     private readonly IConfiguration _config;
@@ -30,6 +32,11 @@ public class AuthService : IAuthService
     private string GenerateRefreshToken()
     {
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+    }
+
+    private static bool HasClaimedDailyRewardToday(User user)
+    {
+        return user.LastDailyRewardClaimedAtUtc?.Date == DateTime.UtcNow.Date;
     }
 
     // ------------------------------------------------------------
@@ -110,6 +117,14 @@ public class AuthService : IAuthService
         user.FailedLoginAttempts = 0;
         user.LockoutEnd = null;
 
+        var dailyRewardClaimedToday = HasClaimedDailyRewardToday(user);
+        if (!dailyRewardClaimedToday)
+        {
+            user.CurrencyBalance += DailyLoginReward;
+            user.LastDailyRewardClaimedAtUtc = DateTime.UtcNow;
+            dailyRewardClaimedToday = true;
+        }
+
         // Generate JWT access token
         var jwt = GenerateJwt(user);
 
@@ -135,7 +150,9 @@ public class AuthService : IAuthService
             Token = jwt,
             RefreshToken = refreshToken,
             Username = user.Username,
-            Role = user.Role
+            Role = user.Role,
+            CurrencyBalance = user.CurrencyBalance,
+            DailyRewardClaimedToday = dailyRewardClaimedToday
         };
     }
 
@@ -280,7 +297,9 @@ public class AuthService : IAuthService
             Token = newJwt,
             RefreshToken = newRefreshToken,
             Username = token.User.Username,
-            Role = token.User.Role
+            Role = token.User.Role,
+            CurrencyBalance = token.User.CurrencyBalance,
+            DailyRewardClaimedToday = HasClaimedDailyRewardToday(token.User)
         };
     }
 
@@ -299,5 +318,26 @@ public class AuthService : IAuthService
         token.Revoked = true;
 
         await _context.SaveChangesAsync();
+    }
+
+    public async Task ResendVerificationEmailAsync(string email)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email == email);
+
+        if (user == null)
+            throw new Exception("User not found.");
+
+        if (user.IsEmailVerified)
+            throw new Exception("Email already verified.");
+
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+
+        user.EmailVerificationToken = token;
+        user.EmailVerificationExpiry = DateTime.UtcNow.AddHours(24);
+
+        await _context.SaveChangesAsync();
+
+        await _emailService.SendVerificationEmailAsync(user.Email, token);
     }
 }

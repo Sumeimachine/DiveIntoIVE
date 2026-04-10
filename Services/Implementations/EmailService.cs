@@ -26,7 +26,8 @@ public class EmailService : IEmailService
     public async Task SendVerificationEmailAsync(string email, string token)
     {
         var encodedToken = Uri.EscapeDataString(token);
-        var verifyLink = $"http://localhost:5173/auth/verify-email?token={encodedToken}";
+        //var verifyLink = $"http://localhost:5173/auth/verify-email?token={encodedToken}";
+        var verifyLink = $"https://www.iveph.com/auth/verify-email?token={encodedToken}";
 
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress("DiveIntoIVE", _emailSettings.Email));
@@ -42,8 +43,8 @@ public class EmailService : IEmailService
     public async Task SendPasswordResetEmailAsync(string email, string token)
     {
         var encodedToken = Uri.EscapeDataString(token);
-        var resetLink = $"http://localhost:5173/auth/verify-email?token={encodedToken}";
-
+        //var resetLink = $"http://localhost:5173/auth/reset-password?token={encodedToken}";
+        var resetLink = $"https://www.iveph.com/auth/reset-password?token={encodedToken}"; ;
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress("DiveIntoIVE", _emailSettings.Email));
         message.To.Add(MailboxAddress.Parse(email));
@@ -52,10 +53,10 @@ public class EmailService : IEmailService
         message.Body = new TextPart("html")
         {
             Text = $"""
-            <h2>Password Reset</h2>
-            <p>Click the link below to reset your password:</p>
-            <a href="{resetLink}">Reset Password</a>
-            """
+        <h2>Password Reset</h2>
+        <p>Click the link below to reset your password:</p>
+        <a href="{resetLink}">Reset Password</a>
+        """
         };
 
         await SendEmail(message);

@@ -4,4 +4,6 @@
     public string RefreshToken { get; set; } = default!;
     public string Username { get; set; } = default!;
     public string Role { get; set; } = default!;
+    public int CurrencyBalance { get; set; }
+    public bool DailyRewardClaimedToday { get; set; }
 }
