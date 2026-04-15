@@ -28,5 +28,6 @@
         public int CurrencyBalance { get; set; }
         public DateTime? LastDailyRewardClaimedAtUtc { get; set; }
         public List<UserRefreshToken> RefreshTokens { get; set; } = new();
+        public List<UserEventRewardClaim> EventRewardClaims { get; set; } = new();
     }
 }

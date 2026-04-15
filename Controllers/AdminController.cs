@@ -14,7 +14,7 @@ namespace DiveIntoIVE.Controllers
         {
             _env = env;
         }
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Super-Admin")]
         [HttpPost("upload-file")]
         public async Task<IActionResult> UploadFile(IFormFile file, [FromQuery] string category = "general")
         {
@@ -46,7 +46,7 @@ namespace DiveIntoIVE.Controllers
             });
         }
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Super-Admin")]
         [HttpDelete("delete-file")]
         public IActionResult DeleteFile([FromQuery] string filePath)
         {
@@ -63,14 +63,14 @@ namespace DiveIntoIVE.Controllers
             return Ok("File deleted");
         }
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Super-Admin")]
         [HttpPost("upload-member")]
         public IActionResult UploadMember()
         {
             return Ok("Member uploaded by Admin");
         }
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Super-Admin")]
         [HttpPost("edit-member")]
         public IActionResult EditMember()
         {

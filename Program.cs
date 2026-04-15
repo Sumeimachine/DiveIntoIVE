@@ -80,6 +80,8 @@ builder.Services.AddCors(options =>
 // ---------------- SERVICES ----------------
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient();
 
 
 // ---------------- CONTROLLERS ----------------
