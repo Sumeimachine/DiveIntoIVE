@@ -76,7 +76,7 @@ namespace DiveIntoIVE.Controllers
             return Ok(ToResponse(fallback));
         }
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Super-Admin")]
         [HttpPut("{memberKey}")]
         public async Task<IActionResult> Update(string memberKey, UpdateMemberProfileDto dto)
         {

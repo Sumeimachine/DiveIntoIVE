@@ -4,6 +4,7 @@ using DiveIntoIVE.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DiveIntoIVE.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260414222034_AddQuizSystem")]
+    partial class AddQuizSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -51,45 +54,6 @@ namespace DiveIntoIVE.Migrations
                     b.HasIndex("QuestionId");
 
                     b.ToTable("AnswerOptions");
-                });
-
-            modelBuilder.Entity("DiveIntoIVE.Models.EventReward", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("EndAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("Points")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("StartAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("EventRewards");
                 });
 
             modelBuilder.Entity("DiveIntoIVE.Models.MemberProfile", b =>
@@ -153,9 +117,6 @@ namespace DiveIntoIVE.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsGraded")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsPublished")
@@ -361,33 +322,6 @@ namespace DiveIntoIVE.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("DiveIntoIVE.Models.UserEventRewardClaim", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("ClaimedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("EventRewardId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EventRewardId");
-
-                    b.HasIndex("UserId", "EventRewardId")
-                        .IsUnique();
-
-                    b.ToTable("UserEventRewardClaims");
-                });
-
             modelBuilder.Entity("DiveIntoIVE.Models.UserRefreshToken", b =>
                 {
                     b.Property<int>("Id")
@@ -488,25 +422,6 @@ namespace DiveIntoIVE.Migrations
                     b.Navigation("Quiz");
                 });
 
-            modelBuilder.Entity("DiveIntoIVE.Models.UserEventRewardClaim", b =>
-                {
-                    b.HasOne("DiveIntoIVE.Models.EventReward", "EventReward")
-                        .WithMany("Claims")
-                        .HasForeignKey("EventRewardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DiveIntoIVE.Models.User", "User")
-                        .WithMany("EventRewardClaims")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("EventReward");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("DiveIntoIVE.Models.UserRefreshToken", b =>
                 {
                     b.HasOne("DiveIntoIVE.Models.User", "User")
@@ -516,11 +431,6 @@ namespace DiveIntoIVE.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("DiveIntoIVE.Models.EventReward", b =>
-                {
-                    b.Navigation("Claims");
                 });
 
             modelBuilder.Entity("DiveIntoIVE.Models.Quiz", b =>
@@ -542,8 +452,6 @@ namespace DiveIntoIVE.Migrations
 
             modelBuilder.Entity("DiveIntoIVE.Models.User", b =>
                 {
-                    b.Navigation("EventRewardClaims");
-
                     b.Navigation("RefreshTokens");
                 });
 #pragma warning restore 612, 618
