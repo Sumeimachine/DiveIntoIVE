@@ -23,6 +23,11 @@ public class QuizController : ControllerBase
     [HttpGet("active")]
     public async Task<IActionResult> GetActiveQuiz([FromQuery] string type = "daily")
     {
+        var userIdResult = TryGetCurrentUserId();
+        if (userIdResult is null)
+            return Unauthorized("User identity is invalid.");
+
+        var userId = userIdResult.Value;
         var now = DateTime.UtcNow;
         var quiz = await _context.Quizzes
             .Include(x => x.Questions.OrderBy(q => q.SortOrder))
@@ -36,12 +41,59 @@ public class QuizController : ControllerBase
         if (quiz is null)
             return Ok(new { message = "No active quiz yet." });
 
-        return Ok(MapQuiz(quiz));
+        var attemptCount = await _context.QuizAttempts.CountAsync(x => x.QuizId == quiz.Id && x.UserId == userId);
+        return Ok(MapQuiz(quiz, attemptCount));
+    }
+
+    [HttpGet("active-list")]
+    public async Task<IActionResult> GetActiveQuizzes()
+    {
+        var userIdResult = TryGetCurrentUserId();
+        if (userIdResult is null)
+            return Unauthorized("User identity is invalid.");
+
+        var userId = userIdResult.Value;
+        var now = DateTime.UtcNow;
+
+        var quizzes = await _context.Quizzes
+            .Include(x => x.Questions.OrderBy(q => q.SortOrder))
+            .ThenInclude(q => q.Options.OrderBy(o => o.SortOrder))
+            .Where(x => x.IsActive && x.IsPublished
+                        && (!x.StartAt.HasValue || x.StartAt <= now)
+                        && (!x.EndAt.HasValue || x.EndAt >= now))
+            .OrderByDescending(x => x.StartAt)
+            .ThenByDescending(x => x.CreatedAt)
+            .ToListAsync();
+
+        if (!quizzes.Any())
+            return Ok(new { message = "No active quizzes yet." });
+
+        var quizIds = quizzes.Select(x => x.Id).ToList();
+        var attemptCountsByQuiz = await _context.QuizAttempts
+            .Where(x => x.UserId == userId && quizIds.Contains(x.QuizId))
+            .GroupBy(x => x.QuizId)
+            .Select(group => new
+            {
+                QuizId = group.Key,
+                AttemptCount = group.Count()
+            })
+            .ToDictionaryAsync(x => x.QuizId, x => x.AttemptCount);
+
+        var payload = quizzes
+            .Select(quiz => MapQuiz(quiz, attemptCountsByQuiz.GetValueOrDefault(quiz.Id, 0)))
+            .ToList();
+
+        return Ok(payload);
     }
 
     [HttpGet("{quizId:int}")]
     public async Task<IActionResult> GetQuizById(int quizId)
     {
+        var userIdResult = TryGetCurrentUserId();
+        if (userIdResult is null)
+            return Unauthorized("User identity is invalid.");
+
+        var userId = userIdResult.Value;
         var quiz = await _context.Quizzes
             .Include(x => x.Questions.OrderBy(q => q.SortOrder))
             .ThenInclude(q => q.Options.OrderBy(o => o.SortOrder))
@@ -50,7 +102,8 @@ public class QuizController : ControllerBase
         if (quiz is null)
             return NotFound("Quiz not found.");
 
-        return Ok(MapQuiz(quiz));
+        var attemptCount = await _context.QuizAttempts.CountAsync(x => x.QuizId == quiz.Id && x.UserId == userId);
+        return Ok(MapQuiz(quiz, attemptCount));
     }
 
     [HttpPost("{quizId:int}/submit")]
@@ -68,14 +121,8 @@ public class QuizController : ControllerBase
         if (quiz is null)
             return NotFound("Quiz not found.");
 
-        if (quiz.Type == "daily")
-        {
-            var hasExistingAttempt = await _context.QuizAttempts
-                .AnyAsync(x => x.QuizId == quizId && x.UserId == userId);
-
-            if (hasExistingAttempt)
-                return BadRequest("Daily quiz can only be answered once.");
-        }
+        var hasScoredAttempt = quiz.Type == "daily" && await _context.QuizAttempts
+            .AnyAsync(x => x.QuizId == quizId && x.UserId == userId);
 
         var attempt = new QuizAttempt
         {
@@ -112,7 +159,9 @@ public class QuizController : ControllerBase
         if (user is null)
             return NotFound("User not found.");
 
-        if (quiz.IsGraded)
+        var isScoreCounted = !hasScoredAttempt;
+
+        if (quiz.IsGraded && isScoreCounted)
         {
             currencyAwarded = attempt.Answers.Count(x => x.IsCorrect);
             user.CurrencyBalance += currencyAwarded;
@@ -128,7 +177,11 @@ public class QuizController : ControllerBase
             attempt.TotalQuestions,
             correctAnswers = attempt.Answers.Count(x => x.IsCorrect),
             currencyAwarded,
-            currencyBalance = user.CurrencyBalance
+            currencyBalance = user.CurrencyBalance,
+            isScoreCounted,
+            message = isScoreCounted
+                ? "Score counted successfully."
+                : "Retake submitted. Score and rewards are locked after your first attempt."
         });
     }
 
@@ -142,14 +195,36 @@ public class QuizController : ControllerBase
             .Where(attempt => attempt.Quiz.IsPublished && attempt.Quiz.IsActive && attempt.Quiz.IsGraded == graded)
             .Select(attempt => new
             {
+                attempt.Id,
+                attempt.QuizId,
                 attempt.UserId,
                 Username = attempt.User.Username,
+                QuizType = attempt.Quiz.Type,
+                attempt.CompletedAt,
                 attempt.Score,
                 CorrectAnswers = attempt.Answers.Count(answer => answer.IsCorrect)
             })
             .ToListAsync();
 
-        var payload = attempts
+        var countedAttempts = attempts
+            .GroupBy(attempt => new { attempt.UserId, attempt.QuizId })
+            .SelectMany(group =>
+            {
+                var quizType = group.First().QuizType;
+                if (quizType == "daily")
+                {
+                    var firstAttempt = group
+                        .OrderBy(attempt => attempt.CompletedAt ?? DateTime.MaxValue)
+                        .ThenBy(attempt => attempt.Id)
+                        .Take(1);
+                    return firstAttempt;
+                }
+
+                return group;
+            })
+            .ToList();
+
+        var payload = countedAttempts
             .GroupBy(attempt => new { attempt.UserId, attempt.Username })
             .Select(group => new
             {
@@ -193,7 +268,7 @@ public class QuizController : ControllerBase
         return Ok(attempt);
     }
 
-    private static QuizViewDto MapQuiz(Quiz quiz)
+    private static QuizViewDto MapQuiz(Quiz quiz, int attemptCount)
     {
         return new QuizViewDto(
             quiz.Id,
@@ -222,7 +297,15 @@ public class QuizController : ControllerBase
                         .Select(option => new QuizOptionViewDto(option.Id, option.Text, option.ImageUrl, option.SortOrder))
                         .ToList()
                 ))
-                .ToList()
+                .ToList(),
+            attemptCount > 0,
+            attemptCount
         );
+    }
+
+    private int? TryGetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }

@@ -161,9 +161,17 @@ app.UseCors("AllowReactApp");
 // ---------------- AUTH ----------------
 // app.UseHttpsRedirection(); // nginx handles HTTPS
 
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        // Allow WebGL texture loading from frontend origins (cross-origin image sampling).
+        // Regular <img> tags can display without this, but Three.js texture uploads require CORS headers.
+        context.Context.Response.Headers["Access-Control-Allow-Origin"] = "*";
+    }
+});
 app.UseAuthentication();
 app.UseAuthorization();
-
 
 // ---------------- ROUTES ----------------
 app.MapControllers();

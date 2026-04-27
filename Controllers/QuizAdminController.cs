@@ -266,6 +266,14 @@ public class QuizAdminController : ControllerBase
         if (question is null)
             return NotFound("Question not found.");
 
+        var hasAttemptAnswers = await _context.QuizAttemptAnswers
+            .AnyAsync(x => x.QuestionId == questionId);
+
+        if (hasAttemptAnswers)
+        {
+            return BadRequest("Question cannot be deleted because users already answered it. Disable it instead.");
+        }
+
         _context.QuizQuestions.Remove(question);
         await _context.SaveChangesAsync();
         return Ok("Question deleted.");
@@ -345,6 +353,14 @@ public class QuizAdminController : ControllerBase
         var option = await _context.AnswerOptions.FindAsync(optionId);
         if (option is null)
             return NotFound("Option not found.");
+
+        var hasAttemptAnswers = await _context.QuizAttemptAnswers
+            .AnyAsync(x => x.AnswerOptionId == optionId);
+
+        if (hasAttemptAnswers)
+        {
+            return BadRequest("Option cannot be deleted because users already selected it in attempts.");
+        }
 
         _context.AnswerOptions.Remove(option);
         await _context.SaveChangesAsync();

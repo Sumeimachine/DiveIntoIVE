@@ -60,7 +60,9 @@ public record QuizViewDto(
     bool IsActive,
     DateTime? StartAt,
     DateTime? EndAt,
-    List<QuizQuestionViewDto> Questions
+    List<QuizQuestionViewDto> Questions,
+    bool HasCompletedFirstAttempt,
+    int AttemptCount
 );
 
 public record QuizLeaderboardEntryDto(
