@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
+using DiveIntoIVE.Configurations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace DiveIntoIVE.Controllers;
 
@@ -15,10 +17,12 @@ public class AdminMediaController : ControllerBase
     };
 
     private readonly IWebHostEnvironment _environment;
+    private readonly AppSettings _appSettings;
 
-    public AdminMediaController(IWebHostEnvironment environment)
+    public AdminMediaController(IWebHostEnvironment environment, IOptions<AppSettings> appSettings)
     {
         _environment = environment;
+        _appSettings = appSettings.Value;
     }
 
     private string ResolveWebRootPath()
@@ -30,11 +34,23 @@ public class AdminMediaController : ControllerBase
         return webRootPath;
     }
 
+    private string ResolveUploadsRootPath()
+    {
+        if (!string.IsNullOrWhiteSpace(_appSettings.UploadsRootPath))
+        {
+            if (Path.IsPathRooted(_appSettings.UploadsRootPath))
+                return _appSettings.UploadsRootPath;
+
+            return Path.GetFullPath(Path.Combine(_environment.ContentRootPath, _appSettings.UploadsRootPath));
+        }
+
+        return Path.Combine(ResolveWebRootPath(), "uploads");
+    }
+
     [HttpGet("library")]
     public IActionResult GetLibrary([FromQuery] string? search = null)
     {
-        var webRootPath = ResolveWebRootPath();
-        var uploadRoot = Path.Combine(webRootPath, "uploads");
+        var uploadRoot = ResolveUploadsRootPath();
 
         if (!Directory.Exists(uploadRoot))
         {
@@ -50,7 +66,7 @@ public class AdminMediaController : ControllerBase
             .Select(path =>
             {
                 var info = new FileInfo(path);
-                var relativePath = "/" + Path.GetRelativePath(webRootPath, path).Replace("\\", "/");
+                var relativePath = "/uploads/" + Path.GetRelativePath(uploadRoot, path).Replace("\\", "/");
                 var baseUrl = $"{Request.Scheme}://{Request.Host}";
                 var folder = Path.GetDirectoryName(Path.GetRelativePath(uploadRoot, path))?.Replace("\\", "/") ?? string.Empty;
 
@@ -96,9 +112,7 @@ public class AdminMediaController : ControllerBase
         if (string.IsNullOrWhiteSpace(normalizedFolder))
             normalizedFolder = "quiz";
 
-        var webRootPath = ResolveWebRootPath();
-
-        var uploadRoot = Path.Combine(webRootPath, "uploads", normalizedFolder);
+        var uploadRoot = Path.Combine(ResolveUploadsRootPath(), normalizedFolder);
         Directory.CreateDirectory(uploadRoot);
 
         var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
@@ -132,9 +146,7 @@ public class AdminMediaController : ControllerBase
         if (!localPath.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
             return BadRequest("Only uploaded media can be deleted.");
 
-        var webRootPath = ResolveWebRootPath();
-
-        var filePath = Path.Combine(webRootPath, localPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        var filePath = Path.Combine(ResolveUploadsRootPath(), localPath["/uploads/".Length..].Replace('/', Path.DirectorySeparatorChar));
 
         if (!System.IO.File.Exists(filePath))
             return NotFound("File not found.");
@@ -161,8 +173,7 @@ public class AdminMediaController : ControllerBase
         if (!localPath.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
             return BadRequest("Only uploaded media can be renamed.");
 
-        var webRootPath = ResolveWebRootPath();
-        var currentPath = Path.Combine(webRootPath, localPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        var currentPath = Path.Combine(ResolveUploadsRootPath(), localPath["/uploads/".Length..].Replace('/', Path.DirectorySeparatorChar));
 
         if (!System.IO.File.Exists(currentPath))
             return NotFound("File not found.");
@@ -180,7 +191,7 @@ public class AdminMediaController : ControllerBase
 
         System.IO.File.Move(currentPath, newPath);
 
-        var relativePath = "/" + Path.GetRelativePath(webRootPath, newPath).Replace("\\", "/");
+        var relativePath = "/uploads/" + Path.GetRelativePath(ResolveUploadsRootPath(), newPath).Replace("\\", "/");
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
 
         return Ok(new

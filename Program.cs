@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
@@ -170,6 +171,29 @@ app.UseStaticFiles(new StaticFileOptions
         context.Context.Response.Headers["Access-Control-Allow-Origin"] = "*";
     }
 });
+
+var uploadsRootPath = builder.Configuration.GetValue<string>("AppSettings:UploadsRootPath");
+if (string.IsNullOrWhiteSpace(uploadsRootPath))
+{
+    uploadsRootPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads");
+}
+else if (!Path.IsPathRooted(uploadsRootPath))
+{
+    uploadsRootPath = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, uploadsRootPath));
+}
+
+Directory.CreateDirectory(uploadsRootPath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsRootPath),
+    RequestPath = "/uploads",
+    OnPrepareResponse = context =>
+    {
+        context.Context.Response.Headers["Access-Control-Allow-Origin"] = "*";
+    }
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
