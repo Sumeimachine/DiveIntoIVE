@@ -189,7 +189,21 @@ public class AdminMediaController : ControllerBase
         if (System.IO.File.Exists(newPath))
             return Conflict("A file with that name already exists in this folder.");
 
+        var oldRelativePath = localPath;
+        var oldUrl = dto.Url;
+
         System.IO.File.Move(currentPath, newPath);
+
+        // Backward compatibility: keep the old URL valid for existing frontend references.
+        // Prefer a symbolic link to avoid duplicating file bytes; fallback to copy if symlink isn't permitted.
+        try
+        {
+            System.IO.File.CreateSymbolicLink(currentPath, newPath);
+        }
+        catch
+        {
+            System.IO.File.Copy(newPath, currentPath, overwrite: false);
+        }
 
         var relativePath = "/uploads/" + Path.GetRelativePath(ResolveUploadsRootPath(), newPath).Replace("\\", "/");
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
@@ -199,7 +213,9 @@ public class AdminMediaController : ControllerBase
             message = "Media renamed.",
             url = $"{baseUrl}{relativePath}",
             relativePath,
-            fileName = Path.GetFileName(newPath)
+            fileName = Path.GetFileName(newPath),
+            previousUrl = oldUrl,
+            previousRelativePath = oldRelativePath
         });
     }
 }
