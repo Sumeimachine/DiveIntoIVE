@@ -195,15 +195,8 @@ public class AdminMediaController : ControllerBase
         System.IO.File.Move(currentPath, newPath);
 
         // Backward compatibility: keep the old URL valid for existing frontend references.
-        // Prefer a symbolic link to avoid duplicating file bytes; fallback to copy if symlink isn't permitted.
-        try
-        {
-            System.IO.File.CreateSymbolicLink(currentPath, newPath);
-        }
-        catch
-        {
-            System.IO.File.Copy(newPath, currentPath, overwrite: false);
-        }
+        // Keep a copy at the old path so existing saved URLs still render.
+        System.IO.File.Copy(newPath, currentPath, overwrite: false);
 
         var relativePath = "/uploads/" + Path.GetRelativePath(ResolveUploadsRootPath(), newPath).Replace("\\", "/");
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
